@@ -3,6 +3,7 @@ package memberlist
 import (
 	"io"
 	"log"
+	"net"
 	"os"
 	"time"
 )
@@ -22,6 +23,8 @@ type Config struct {
 	// to.
 	BindAddr string
 	BindPort int
+
+	TCPListener net.Listener
 
 	// Configuration related to what address to advertise to other
 	// cluster members. Used for nat traversal.

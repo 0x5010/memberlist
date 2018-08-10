@@ -31,6 +31,8 @@ type NetTransportConfig struct {
 	// BindPort is the port to listen on, for each address above.
 	BindPort int
 
+	TCPListeners []net.Listener
+
 	// Logger is a logger for operator messages.
 	Logger *log.Logger
 }
@@ -43,7 +45,7 @@ type NetTransport struct {
 	streamCh     chan net.Conn
 	logger       *log.Logger
 	wg           sync.WaitGroup
-	tcpListeners []*net.TCPListener
+	tcpListeners []net.Listener
 	udpListeners []*net.UDPConn
 	shutdown     int32
 }
@@ -78,10 +80,19 @@ func NewNetTransport(config *NetTransportConfig) (*NetTransport, error) {
 	for _, addr := range config.BindAddrs {
 		ip := net.ParseIP(addr)
 
-		tcpAddr := &net.TCPAddr{IP: ip, Port: port}
-		tcpLn, err := net.ListenTCP("tcp", tcpAddr)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to start TCP listener on %q port %d: %v", addr, port, err)
+		var tcpLn net.Listener
+		for _, l := range config.TCPListeners {
+			if l.Addr().String() == fmt.Sprintf("%s:%d", ip, port) {
+				tcpLn = l
+				break
+			}
+		}
+		if tcpLn == nil {
+			var err error
+			tcpLn, err = net.ListenTCP("tcp", &net.TCPAddr{IP: ip, Port: port})
+			if err != nil {
+				return nil, fmt.Errorf("Failed to start TCP listener on %q port %d: %v", addr, port, err)
+			}
 		}
 		t.tcpListeners = append(t.tcpListeners, tcpLn)
 
@@ -219,10 +230,10 @@ func (t *NetTransport) Shutdown() error {
 
 // tcpListen is a long running goroutine that accepts incoming TCP connections
 // and hands them off to the stream channel.
-func (t *NetTransport) tcpListen(tcpLn *net.TCPListener) {
+func (t *NetTransport) tcpListen(tcpLn net.Listener) {
 	defer t.wg.Done()
 	for {
-		conn, err := tcpLn.AcceptTCP()
+		conn, err := tcpLn.Accept()
 		if err != nil {
 			if s := atomic.LoadInt32(&t.shutdown); s == 1 {
 				break
