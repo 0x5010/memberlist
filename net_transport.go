@@ -82,7 +82,12 @@ func NewNetTransport(config *NetTransportConfig) (*NetTransport, error) {
 
 		var tcpLn net.Listener
 		for _, l := range config.TCPListeners {
-			if l.Addr().String() == fmt.Sprintf("%s:%d", ip, port) {
+			if l.Addr().(*net.TCPAddr).Port != port {
+				continue
+			}
+			lip := l.Addr().(*net.TCPAddr).IP.String()
+			fmt.Println(lip, ip.String(), lip == ip.String(), lip == "0.0.0.0", lip == "::")
+			if lip == ip.String() || lip == "0.0.0.0" || lip == "::" {
 				tcpLn = l
 				break
 			}
